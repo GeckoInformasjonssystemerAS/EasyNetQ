@@ -4,12 +4,12 @@ using EasyNetQ.Consumer;
 using EasyNetQ.FluentConfiguration;
 using EasyNetQ.Producer;
 using EasyNetQ.Topology;
+using System.Linq;
 
 namespace EasyNetQ
 {
     public class RabbitBus : IBus
     {
-        private readonly IEasyNetQLogger logger;
         private readonly IConventions conventions;
         private readonly IAdvancedBus advancedBus;
         private readonly IPublishExchangeDeclareStrategy publishExchangeDeclareStrategy;
@@ -18,18 +18,7 @@ namespace EasyNetQ
         private readonly ISendReceive sendReceive;
         private readonly ConnectionConfiguration connectionConfiguration;
 
-        public IEasyNetQLogger Logger
-        {
-            get { return logger; }
-        }
-
-        public IConventions Conventions
-        {
-            get { return conventions; }
-        }
-
         public RabbitBus(
-            IEasyNetQLogger logger,
             IConventions conventions,
             IAdvancedBus advancedBus,
             IPublishExchangeDeclareStrategy publishExchangeDeclareStrategy,
@@ -38,7 +27,6 @@ namespace EasyNetQ
             ISendReceive sendReceive,
             ConnectionConfiguration connectionConfiguration)
         {
-            Preconditions.CheckNotNull(logger, "logger");
             Preconditions.CheckNotNull(conventions, "conventions");
             Preconditions.CheckNotNull(advancedBus, "advancedBus");
             Preconditions.CheckNotNull(publishExchangeDeclareStrategy, "publishExchangeDeclareStrategy");
@@ -46,7 +34,6 @@ namespace EasyNetQ
             Preconditions.CheckNotNull(sendReceive, "sendReceive");
             Preconditions.CheckNotNull(connectionConfiguration, "connectionConfiguration");
 
-            this.logger = logger;
             this.conventions = conventions;
             this.advancedBus = advancedBus;
             this.publishExchangeDeclareStrategy = publishExchangeDeclareStrategy;
@@ -54,9 +41,6 @@ namespace EasyNetQ
             this.rpc = rpc;
             this.sendReceive = sendReceive;
             this.connectionConfiguration = connectionConfiguration;
-
-            advancedBus.Connected += OnConnected;
-            advancedBus.Disconnected += OnDisconnected;
         }
 
         public virtual void Publish<T>(T message) where T : class
@@ -88,17 +72,23 @@ namespace EasyNetQ
             var messageType = typeof (T);
             return publishExchangeDeclareStrategy.DeclareExchangeAsync(advancedBus, messageType, ExchangeType.Topic).Then(exchange =>
                 {
-                    var easyNetQMessage = new Message<T>(message) { Properties = { DeliveryMode = (byte)(messageDeliveryModeStrategy.IsPersistent(messageType) ? 2 : 1) } };
+                    var easyNetQMessage = new Message<T>(message)
+                    {
+                        Properties =
+                        {
+                            DeliveryMode = messageDeliveryModeStrategy.GetDeliveryMode(messageType)
+                        }
+                    };
                     return advancedBus.PublishAsync(exchange, topic, false, false, easyNetQMessage); 
                 });
         }
 
-        public virtual IDisposable Subscribe<T>(string subscriptionId, Action<T> onMessage) where T : class
+        public virtual ISubscriptionResult Subscribe<T>(string subscriptionId, Action<T> onMessage) where T : class
         {
             return Subscribe(subscriptionId, onMessage, x => { });
         }
 
-        public virtual IDisposable Subscribe<T>(string subscriptionId, Action<T> onMessage, Action<ISubscriptionConfiguration> configure) where T : class
+        public virtual ISubscriptionResult Subscribe<T>(string subscriptionId, Action<T> onMessage, Action<ISubscriptionConfiguration> configure) where T : class
         {
             Preconditions.CheckNotNull(subscriptionId, "subscriptionId");
             Preconditions.CheckNotNull(onMessage, "onMessage");
@@ -121,12 +111,12 @@ namespace EasyNetQ
             configure);
         }
 
-        public virtual IDisposable SubscribeAsync<T>(string subscriptionId, Func<T, Task> onMessage) where T : class
+        public virtual ISubscriptionResult SubscribeAsync<T>(string subscriptionId, Func<T, Task> onMessage) where T : class
         {
             return SubscribeAsync(subscriptionId, onMessage, x => { });
         }
 
-        public virtual IDisposable SubscribeAsync<T>(string subscriptionId, Func<T, Task> onMessage, Action<ISubscriptionConfiguration> configure) where T : class
+        public virtual ISubscriptionResult SubscribeAsync<T>(string subscriptionId, Func<T, Task> onMessage, Action<ISubscriptionConfiguration> configure) where T : class
         {
             Preconditions.CheckNotNull(subscriptionId, "subscriptionId");
             Preconditions.CheckNotNull(onMessage, "onMessage");
@@ -141,12 +131,12 @@ namespace EasyNetQ
             var queue = advancedBus.QueueDeclare(queueName, autoDelete: configuration.AutoDelete, expires: configuration.Expires);
             var exchange = advancedBus.ExchangeDeclare(exchangeName, ExchangeType.Topic);
 
-            foreach (var topic in configuration.Topics.AtLeastOneWithDefault("#"))
+            foreach (var topic in configuration.Topics.DefaultIfEmpty("#"))
             {
                 advancedBus.Bind(exchange, queue, topic);
             }
 
-            return advancedBus.Consume<T>(
+            var consumerCancellation = advancedBus.Consume<T>(
                 queue,
                 (message, messageReceivedInfo) => onMessage(message.Body),
                 x =>
@@ -155,8 +145,11 @@ namespace EasyNetQ
                          .WithCancelOnHaFailover(configuration.CancelOnHaFailover)
                          .WithPrefetchCount(configuration.PrefetchCount);
                         if (configuration.IsExclusive)
+                        {
                             x.AsExclusive();
+                        }
                     });
+            return new SubscriptionResult(exchange, queue, consumerCancellation);
         }
 
         public virtual TResponse Request<TRequest, TResponse>(TRequest request)
@@ -258,20 +251,6 @@ namespace EasyNetQ
         public virtual IDisposable Receive(string queue, Action<IReceiveRegistration> addHandlers, Action<IConsumerConfiguration> configure)
         {
             return sendReceive.Receive(queue, addHandlers, configure);
-        }
-
-        public virtual event Action Connected;
-
-        protected void OnConnected()
-        {
-            if (Connected != null) Connected();
-        }
-
-        public virtual event Action Disconnected;
-
-        protected void OnDisconnected()
-        {
-            if (Disconnected != null) Disconnected();
         }
 
         public virtual bool IsConnected

@@ -1,4 +1,6 @@
 using System;
+using System.IO;
+using System.Net.Sockets;
 using System.Threading;
 using EasyNetQ.Events;
 using RabbitMQ.Client;
@@ -10,6 +12,11 @@ namespace EasyNetQ
     public interface IPersistentConnection : IDisposable
     {
         bool IsConnected { get; }
+        /// <summary>
+        /// Initialization method that should be called only once,
+        /// usually right after the implementation constructor has run.
+        /// </summary>
+        void Initialize();
         IModel CreateModel();
     }
 
@@ -23,6 +30,8 @@ namespace EasyNetQ
         private readonly IConnectionFactory connectionFactory;
         private readonly IEasyNetQLogger logger;
         private readonly IEventBus eventBus;
+        private readonly object locker = new object();
+        private bool initialized = false;
         private IConnection connection;
 
         public PersistentConnection(IConnectionFactory connectionFactory, IEasyNetQLogger logger, IEventBus eventBus)
@@ -34,13 +43,27 @@ namespace EasyNetQ
             this.connectionFactory = connectionFactory;
             this.logger = logger;
             this.eventBus = eventBus;
+        }
 
-            TryToConnect(null);
+        public void Initialize()
+        {
+            lock (locker)
+            {
+                if (initialized)
+                {
+                    throw new EasyNetQException("This PersistentConnection has already been initialized.");
+                }
+                initialized = true;
+                TryToConnect(null);
+            }
         }
 
         public IModel CreateModel()
         {
-            if(!IsConnected) throw new EasyNetQException("Not connected");
+            if (!IsConnected)
+            {
+                throw new EasyNetQException("PersistentConnection: Attempt to create a channel while being disconnected.");
+            }
 
             return connection.CreateModel();
         }
@@ -71,7 +94,7 @@ namespace EasyNetQ
                     connection = connectionFactory.CreateConnection();
                     connectionFactory.Success();
                 }
-                catch (System.Net.Sockets.SocketException socketException)
+                catch (SocketException socketException)
                 {
                     LogException(socketException);
                 }
@@ -111,7 +134,7 @@ namespace EasyNetQ
                 exception.Message);
         }
 
-        void OnConnectionShutdown(IConnection _, ShutdownEventArgs reason)
+        void OnConnectionShutdown(object sender, ShutdownEventArgs e)
         {
             if (disposed) return;
             OnDisconnected();
@@ -122,14 +145,14 @@ namespace EasyNetQ
             TryToConnect(null);
         }
 
-        void OnConnectionBlocked(IConnection sender, ConnectionBlockedEventArgs reason)
+        void OnConnectionBlocked(object sender, ConnectionBlockedEventArgs e)
         {
-            logger.InfoWrite("Connection blocked. Reason: '{0}'", reason.Reason);
+            logger.InfoWrite("Connection blocked. Reason: '{0}'", e.Reason);
 
-            eventBus.Publish(new ConnectionBlockedEvent(reason.Reason));
+            eventBus.Publish(new ConnectionBlockedEvent(e.Reason));
         }
 
-        void OnConnectionUnblocked(IConnection sender)
+        void OnConnectionUnblocked(object sender, EventArgs e)
         {
             logger.InfoWrite("Connection unblocked.");
 
@@ -158,7 +181,7 @@ namespace EasyNetQ
                 {
                     connection.Dispose();
                 }
-                catch (System.IO.IOException exception)
+                catch (IOException exception)
                 {
                     logger.DebugWrite(
                         "IOException thrown on connection dispose. Message: '{0}'. " + 

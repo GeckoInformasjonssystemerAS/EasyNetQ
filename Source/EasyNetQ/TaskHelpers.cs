@@ -154,33 +154,33 @@ namespace EasyNetQ
             return tcs.Task;
         }
 
-        public static Task Then(this Task first, Action next)
-        {
-            if (first == null) throw new ArgumentNullException("first");
-            if (next == null) throw new ArgumentNullException("next");
+        //public static Task Then(this Task first, Action next)
+        //{
+        //    if (first == null) throw new ArgumentNullException("first");
+        //    if (next == null) throw new ArgumentNullException("next");
 
-            var tcs = new TaskCompletionSource<NullStruct>();
-            first.ContinueWith(x =>
-            {
-                if (x.IsFaulted)
-                    tcs.TrySetException(x.Exception.InnerExceptions);
-                else if (x.IsCanceled)
-                    tcs.TrySetCanceled();
-                else
-                {
-                    try
-                    {
-                        next();
-                        tcs.TrySetResult(new NullStruct());
-                    }
-                    catch (Exception exc)
-                    {
-                        tcs.TrySetException(exc);
-                    }
-                }
-            });
-            return tcs.Task;
-        }
+        //    var tcs = new TaskCompletionSource<NullStruct>();
+        //    first.ContinueWith(x =>
+        //    {
+        //        if (x.IsFaulted)
+        //            tcs.TrySetException(x.Exception.InnerExceptions);
+        //        else if (x.IsCanceled)
+        //            tcs.TrySetCanceled();
+        //        else
+        //        {
+        //            try
+        //            {
+        //                next();
+        //                tcs.TrySetResult(new NullStruct());
+        //            }
+        //            catch (Exception exc)
+        //            {
+        //                tcs.TrySetException(exc);
+        //            }
+        //        }
+        //    });
+        //    return tcs.Task;
+        //}
 
 
         public static Task<T> FromResult<T>(T value)

@@ -32,9 +32,14 @@ namespace EasyNetQ.Producer
 
             DeclareQueue(queue);
             
-            var wrappedMessage = new Message<T>(message);
-            wrappedMessage.Properties.DeliveryMode = (byte)(messageDeliveryModeStrategy.IsPersistent(typeof(T)) ? 2 : 1);
-            
+            var wrappedMessage = new Message<T>(message)
+            {
+                Properties =
+                {
+                    DeliveryMode = messageDeliveryModeStrategy.GetDeliveryMode(typeof(T))
+                }
+            };
+
             advancedBus.Publish(Exchange.GetDefault(), queue, false, false, wrappedMessage);
         }
 
@@ -46,8 +51,13 @@ namespace EasyNetQ.Producer
 
             DeclareQueue(queue);
 
-            var wrappedMessage = new Message<T>(message);
-            wrappedMessage.Properties.DeliveryMode = (byte)(messageDeliveryModeStrategy.IsPersistent(typeof(T)) ? 2 : 1);
+            var wrappedMessage = new Message<T>(message)
+            {
+                Properties =
+                {
+                    DeliveryMode = messageDeliveryModeStrategy.GetDeliveryMode(typeof(T))
+                }
+            };
 
             return advancedBus.PublishAsync(Exchange.GetDefault(), queue, false, false, wrappedMessage);
         }

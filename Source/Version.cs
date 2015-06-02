@@ -2,11 +2,33 @@
 using System.Reflection;
 
 // EasyNetQ version number: <major>.<minor>.<non-breaking-feature>.<build>
-[assembly: AssemblyVersion("0.44.0.0")]
+[assembly: AssemblyVersion("0.49.2.0")]
 [assembly: CLSCompliant(true)]
 
 // Note: until version 1.0 expect breaking changes on 0.X versions.
 
+// 0.49.2.0 Fix subscription for events if queues were created in previous versions
+// 0.49.1.0 Priority queue support
+// 0.49.0.0 Updated to RabbitMQ.Client 3.5.1
+// 0.48.1.0 Fix unhandled exception
+// 0.48.0.0 Refactor IScheduler and its implementations
+// 0.47.10.0 RabbitHutch.CreateBus overloads
+// 0.47.9.0 TypeNameSerializer now uses a ConcurrentDictionary to store se/deserialization results.
+// 0.47.8.0 Rpc.Respond will validate serialized length of TResponse upon method call to prevent silent exception when executing responder.
+// 0.47.7.0 Validating ConnectionConfiguration in lowest level method of RabbitHutch.
+// 0.47.6.0 AtLeastOneWithDefault -> DefaultIfEmpty
+// 0.47.5.0 PersistentChannel update preventing race condition following PersistentConnection quick connection/disconnection.
+// 0.47.4.0 Refactor MessageDeliveryModeStrategy
+// 0.47.3.0 Using MessageDeliveryMode instead of hardcoded 1/2 and Exchange/ExchangeType update.
+// 0.47.2.0 Logging is disabled by default.
+// 0.47.1.0 Bug fix, when the message broker connection is lost is not possible any more publish a message on queue EasyNetQ_Default_Error_Queue.
+// 0.47.0.0 It's now required to call PersistentConnection.Initialize() to bootstrap a PersistentConnection and make it start attempting to connect.
+// 0.46.1.0 Fix NullReferenceException on Serialize
+// 0.46.0.0 Implementation of AdvancedBusEventHandlers and events are gone from IBus.
+// 0.45.0.0 IBus Subscription methods now return an ISubscriptionResult and IAdvancedBus exposes IConventions.
+// 0.44.3.0 RabbitHutch.CreateBus overload
+// 0.44.2.0 Bug fix, when a subscriptionId is null the queue name end with '_'
+// 0.44.1.0 SSL enabled cluster support - Added SSL options per host configuration
 // 0.44.0.0 Added Action<IConsumerConfiguration> overloads to Receive() on IBus, ISendReceive, and their implementations
 // 0.43.1.0 Management Client fix for URI slash escaping in .NET 4.0 with https connection.
 // 0.43.0.0 Use ILRepack to internally merge Newtonsoft.Json in ManagementClient, default WebRequest.KeepAlive to false to resolve spurious 'the request was aborted: the request was canceled' exceptions
